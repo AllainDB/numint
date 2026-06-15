@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NUMINT — phone number intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.11.17/bundle/libphonenumber-max.js"></script>
+<style>
+  :root {
+    --bg: #0E1620; --panel: #15212E; --panel-2: #1B2A3A; --line: #26394B;
+    --txt: #E8EEF3; --muted: #7E93A6; --amber: #F2A03D; --teal: #3DD6A0; --red: #F2615D;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 50% -10%, #1a2b3d 0%, transparent 60%), var(--bg);
+    color: var(--txt); font-family: "Inter", system-ui, sans-serif;
+    min-height: 100vh; display: flex; justify-content: center; padding: 32px 18px 72px;
+  }
+  .console { width: 100%; max-width: 560px; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 28px; }
+  .lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--amber); box-shadow: 0 0 10px var(--amber); margin-right: 9px; vertical-align: middle; }
+  .brand { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 2px; }
+  .eyebrow { font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted);
+    letter-spacing: 1.5px; text-transform: uppercase; }
+  .lede { font-family: "Space Grotesk", sans-serif; font-weight: 500; font-size: 17px; margin: 0 0 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .row { display: flex; gap: 10px; }
+  label { display: block; font-family: "JetBrains Mono", monospace; font-size: 10px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  input { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    color: var(--txt); font-family: "JetBrains Mono", monospace; font-size: 15px; padding: 12px; outline: none; transition: border-color .15s; }
+  input:focus-visible { border-color: var(--amber); }
+  .num-wrap { flex: 1; } .region-wrap { width: 96px; }
+  button.scan { margin-top: 14px; width: 100%; background: var(--amber); color: #16202b;
+    font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 1.5px;
+    border: 0; border-radius: 8px; padding: 13px; cursor: pointer; text-transform: uppercase; transition: transform .08s, filter .15s; }
+  button.scan:hover { filter: brightness(1.07); }
+  button.scan:active { transform: translateY(1px); }
+  button.scan:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+  .results { margin-top: 18px; }
+  .placeholder { color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 13px;
+    text-align: center; padding: 30px 10px; border: 1px dashed var(--line); border-radius: 12px; }
+  .err { color: var(--red); font-family: "JetBrains Mono", monospace; font-size: 13px;
+    border: 1px solid var(--red); border-radius: 12px; padding: 16px; }
+  .verdict { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+  .verdict-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .verdict-word { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 26px; letter-spacing: 1px; }
+  .verdict-cap { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--muted); }
+  .meter { display: flex; gap: 6px; }
+  .seg { flex: 1; height: 8px; border-radius: 4px; background: var(--panel-2); transition: background .35s, box-shadow .35s; }
+  .seg.on-low { background: var(--teal); box-shadow: 0 0 12px var(--teal); }
+  .seg.on-elev { background: var(--amber); box-shadow: 0 0 12px var(--amber); }
+  .seg.on-high { background: var(--red); box-shadow: 0 0 12px var(--red); }
+  .flags { list-style: none; margin: 14px 0 0; padding: 0; }
+  .flags li { font-family: "JetBrains Mono", monospace; font-size: 12.5px; color: var(--txt);
+    padding: 7px 0 7px 18px; position: relative; border-top: 1px solid var(--line); }
+  .flags li::before { content: "\25B8"; position: absolute; left: 0; color: var(--amber); }
+  .flags li.info { color: var(--muted); }
+  .flags li.info::before { content: "\2139"; color: var(--muted); }
+  .flags li.good { color: var(--teal); }
+  .flags li.good::before { content: "\2713"; color: var(--teal); }
+  .data { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 4px 18px; margin-bottom: 14px; }
+  .field { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); gap: 12px; }
+  .field:first-child { border-top: 0; }
+  .field .k { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .field .v { font-family: "JetBrains Mono", monospace; font-size: 14px; color: var(--txt); text-align: right; word-break: break-word; }
+  .v.no { color: var(--red); } .v.yes { color: var(--teal); } .v.pending { color: var(--muted); }
+  .foot { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+  .foot h3 { font-family: "JetBrains Mono", monospace; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  .foot a { display: flex; justify-content: space-between; align-items: center; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px 13px; margin-bottom: 8px; text-decoration: none; color: var(--txt); font-family: "Inter", sans-serif; font-size: 13.5px; transition: border-color .15s; }
+  .foot a:last-child { margin-bottom: 0; }
+  .foot a:hover { border-color: var(--amber); }
+  .foot a:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  .foot a .arr { color: var(--amber); font-family: "JetBrains Mono", monospace; }
+  .disclaimer { color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 10.5px; line-height: 1.6; margin-top: 18px; text-align: center; }
+  .fade { animation: fade .35s ease both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .fade { animation: none; } .seg { transition: none; } }
+</style>
+</head>
+<body>
+  <main class="console">
+    <div class="head">
+      <div><span class="lamp"></span><span class="brand">NUMINT</span></div>
+      <span class="eyebrow">phone number intel</span>
+    </div>
+    <p class="lede">Run a quick read on any phone number — validity, origin, line type, and a scam-risk signal.</p>
+    <div class="panel">
+      <div class="row">
+        <div class="num-wrap">
+          <label for="num">Number</label>
+          <input id="num" type="tel" placeholder="305-555-1234 or 3055551234" autocomplete="off" />
+        </div>
+        <div class="region-wrap">
+          <label for="region">Region</label>
+          <input id="region" type="text" placeholder="US" value="US" maxlength="2" autocomplete="off" />
+        </div>
+      </div>
+      <button class="scan" id="scan">Scan</button>
+    </div>
+    <section class="results" id="results">
+      <div class="placeholder">Enter a number above to run an analysis.</div>
+    </section>
+    <p class="disclaimer">Live carrier, VOIP, and fraud data via IPQualityScore. The scam signal raises suspicion, it does not prove intent.</p>
+  </main>
+<script>
+(function () {
+  // ====== CONFIG ======
+  // After deploying the Worker, paste its URL here (no trailing slash). Leave "" for offline-only mode.
+  var WORKER_URL = "https://numint.allaindborno.workers.dev";
+  // ====================
+
+  var AREACODES = {"201":"Bayonne, NJ","202":"Washington, DC","203":"Bridgeport, CT","204":"Winnipeg, MB","205":"Birmingham, AL","206":"Seattle, WA","207":"Portland, ME","208":"Boise, ID","209":"Lodi, CA","210":"San Antonio, TX","212":"New York City, NY","213":"Los Angeles, CA","214":"Dallas, TX","215":"Levittown, PA","216":"Cleveland, OH","217":"Champaign, IL","218":"Duluth, MN","219":"Gary, IN","220":"Athens, OH","223":"Lancaster, PA","224":"Arlington Heights, IL","225":"Baton Rouge, LA","226":"London, ON","227":"Silver Spring, MD","228":"Biloxi, MS","229":"Albany, GA","231":"Grant, MI","234":"Akron, OH","235":"Missouri","236":"Vancouver, BC","239":"Cape Coral, FL","240":"Aspen Hill, MD","248":"Farmington Hills, MI","249":"Sudbury, ON","250":"Kelowna, BC","251":"Mobile, AL","252":"Elizabeth City, NC","253":"Kent, WA","254":"Eastland, TX","256":"Decatur, AL","257":"British Colombia","260":"Fort Wayne, IN","262":"Kenosha, WI","263":"Montreal, QC","267":"Levittown, PA","269":"Allegan, MI","270":"Bowling Green, KY","272":"Back Mountain, PA","274":"Green Bay, WI","276":"Danville, VA","278":"ann arbor, MI","279":"Arden-Arcade, CA","281":"Baytown, TX","283":"Cincinnati, OH","289":"Hamilton, ON","301":"Aspen Hill, MD","302":"Dover, DE","303":"Aurora, CO","304":"Charleston, WV","305":"Miami, FL","306":"Saskatoon, SK","307":"Casper, WY","308":"Kearney, NE","309":"Bloomington, IL","310":"Los Angeles, CA","312":"Chicago, IL","313":"Dearborn, MI","314":"Florissant, MO","315":"Syracuse, NY","316":"Wichita, KS","317":"Indianapolis, IN","318":"Bossier City, LA","319":"Cedar Rapids, IA","320":"Alexandria, MN","321":"Melbourne, FL","323":"Los Angeles, CA","324":"Florida","325":"Abilene, TX","326":"Dayton, OH","327":"Jonesboro, AR","329":"New York","330":"Akron, OH","331":"Aurora, IL","332":"Manhattan, NY","334":"Auburn, AL","336":"Greensboro, NC","337":"Lafayette, LA","339":"Lynn, MA","340":"charlotte amalie, VI","341":"Oakland, CA","343":"Ottawa, ON","346":"Alvin, TX","347":"Bronx, NY","350":"California","351":"Haverhill, MA","352":"Gainesville, FL","353":"Wisconsin","354":"Granby, QC","360":"Bellingham, WA","361":"Corpus Christi, TX","363":"New York","364":"Owensboro, KY","365":"Hamilton, ON","367":"Quebec, QC","368":"Calgary, AB","369":"santa rosa, CA","380":"Columbus, OH","382":"Ontario","385":"Ogden, UT","386":"Daytona Beach, FL","401":"Cranston, RI","402":"Columbus, NE","403":"Calgary, AB","404":"Atlanta, GA","405":"Midwest City, OK","406":"Billings, MT","407":"Orlando, FL","408":"Gilroy, CA","409":"Beaumont, TX","410":"Annapolis, MD","412":"Pittsburgh, PA","413":"Chicopee, MA","414":"Milwaukee, WI","415":"San Francisco, CA","416":"Toronto, ON","417":"Springfield, MO","418":"Quebec, QC","419":"Toledo, OH","423":"Chattanooga, TN","424":"Beverly Hills, CA","425":"Bellevue, WA","428":"New Brunswick","430":"Longview, TX","431":"Winnipeg, MB","432":"Midland, TX","434":"Lynchburg, VA","435":"Cedar City, UT","437":"Toronto, ON","438":"Montreal, QC","440":"Cleveland, OH","442":"Apple Valley, CA","443":"Baltimore, MD","445":"Philadelphia, PA","447":"Champaign, IL","448":"Florida","450":"Granby, QC","458":"Eugene, OR","463":"Carmel, IN","464":"Cicero, IL","468":"Sherbrooke, QC","469":"Carrollton, TX","470":"Atlanta, GA","474":"Saskatoon, SK","475":"Bridgeport, CT","478":"Macon, GA","479":"Fayetteville, AR","480":"Chandler, AZ","484":"Allentown, PA","501":"Little Rock, AR","502":"Louisville, KY","503":"Beaver, OR","504":"Kenner, LA","505":"Albuquerque, NM","506":"Moncton, NB","507":"Austin, MN","508":"Cambridge, MA","509":"Kennewick, WA","510":"Alameda, CA","512":"Austin, TX","513":"Cincinnati, OH","514":"Montreal, QC","515":"Ames, IA","516":"Freeport, NY","517":"Charlotte, MI","518":"Albany, NY","519":"London, ON","520":"Casas Adobes, AZ","530":"Chico, CA","531":"Omaha, NE","534":"Eau Claire, WI","539":"Bartlesville, OK","540":"Blacksburg, VA","541":"Bend, OR","548":"London, ON","551":"Bayonne, NJ","557":"St. Louis, MO","559":"Clovis, CA","561":"Boca Raton, FL","562":"Bellflower, CA","563":"Davenport, IA","564":"Seattle, WA","567":"Toledo, OH","570":"Scranton, PA","571":"Alexandria, VA","572":"Oklahoma","573":"Columbia, MO","574":"Elkhart, IN","575":"Alamogordo, NM","579":"Granby, QC","580":"Lawton, OK","581":"Quebec, QC","582":"Pennsylvania","584":"Winnipeg, MB","585":"Arcade, NY","586":"Sterling Heights, MI","587":"Edmonton, AB","600":"Canada","601":"Hattiesburg, MS","602":"Phoenix, AZ","603":"Dover, NH","604":"Vancouver, BC","605":"Rapid City, SD","606":"Ashland, KY","607":"Elmira, NY","608":"Janesville, WI","609":"Allentown, NJ","610":"Allentown, PA","612":"Minneapolis, MN","613":"Ottawa, ON","614":"Columbus, OH","615":"Murfreesboro, TN","616":"Grand Rapids, MI","617":"Boston, MA","618":"Alton, IL","619":"Chula Vista, CA","620":"Dodge City, KS","622":"Canada","623":"Phoenix, AZ","626":"Alhambra, CA","627":"santa rosa, CA","628":"San Francisco, CA","629":"Brentwood, TN","630":"Naperville, IL","631":"Babylon, NY","633":"Canada","636":"St. Charles, MO","639":"Saskatoon, SK","640":"Allentown, NJ","641":"Mason City, IA","645":"Florida","646":"New York City, NY","647":"Toronto, ON","650":"Daly City, CA","651":"St. Paul, MN","656":"Florida","657":"Anaheim, CA","658":"Jamaica","659":"Birmingham, AL","660":"Marshall, MO","661":"Earlimart, CA","662":"Starkville, MS","667":"Baltimore, MD","669":"San Jose, CA","670":"saipan, MP","671":"Hagatna, GU","672":"Vancouver, BC","678":"Atlanta, GA","679":"Detroit, MI","680":"Auburn, NY","681":"Charleston, WV","682":"Arlington, TX","683":"Sudbury, ON","684":"Pago Pago, AS","686":"Virginia","689":"Orlando, FL","701":"Bismarck, ND","702":"Henderson, NV","703":"Alexandria, VA","704":"Charlotte, NC","705":"Sudbury, ON","706":"Athens, GA","707":"Benicia, CA","708":"Berwyn, IL","709":"St. John's, NL","712":"Council Bluffs, IA","713":"Houston, TX","714":"Anaheim, CA","715":"Chippewa Falls, WI","716":"Cattaraugus, NY","717":"Lancaster, PA","718":"Bellerose, NY","719":"Alamosa, CO","720":"Boulder, CO","724":"New Castle, PA","725":"Henderson, NV","726":"San Antonio, TX","727":"Clearwater, FL","728":"Palm Beach, FL","730":"Alton, IL","731":"Jackson, TN","732":"Brick Township, NJ","734":"Ann Arbor, MI","737":"Austin, TX","738":"California","740":"Athens, OH","742":"Hamilton, ON","743":"Greensboro, NC","747":"Burbank, CA","748":"Colorado","753":"Ottawa, ON","754":"Coral Springs, FL","757":"Chesapeake, VA","760":"Apple Valley, CA","762":"Athens, GA","763":"Brooklyn Park, MN","765":"Kokomo, IN","769":"Hattiesburg, MS","770":"Atlanta, GA","771":"Washington D.C.","772":"Port St. Lucie, FL","773":"Chicago, IL","774":"Brockton, MA","775":"Carson City, NV","778":"Vancouver, BC","779":"Joliet, IL","780":"Edmonton, AB","781":"Lynn, MA","782":"Halifax, NS","784":"Saint Vincent And The Grenadines","785":"Abilene, KS","786":"Miami, FL","787":"Puerto Rico","801":"Ogden, UT","802":"Bennington, VT","803":"Columbia, SC","804":"Mechanicsville, VA","805":"Camarillo, CA","806":"Amarillo, TX","807":"Kenora, ON","808":"Honolulu, HI","809":"Dominican Republic","810":"Flint, MI","812":"Bloomington, IN","813":"Tampa, FL","814":"Erie, PA","815":"Joliet, IL","816":"Kansas City, MO","817":"Arlington, TX","818":"Agoura Hills, CA","819":"Sherbrooke, QC","820":"Camarillo, CA","821":"South Carolina","825":"Calgary, AB","826":"Virginia","828":"Asheville, NC","829":"Dominican Republic","830":"Medina, TX","831":"Salinas, CA","832":"Baytown, TX","835":"Pennsylvania","838":"Albany, NY","839":"Columbia, SC","840":"California","843":"Charleston, SC","845":"Kingston, NY","847":"Arlington Heights, IL","848":"Brick Township, NJ","849":"Dominican Republic","850":"Pensacola, FL","854":"Charleston, SC","856":"Camden, NJ","857":"Boston, MA","858":"San Diego, CA","859":"Lexington, KY","860":"Bristol, CT","862":"Clifton, NJ","863":"Lakeland, FL","864":"Greenville, SC","865":"Knoxville, TN","867":"Whitehorse, YT","870":"Jonesboro, AR","872":"Chicago, IL","873":"Sherbrooke, QC","876":"Jamaica","878":"Pittsburgh, PA","879":"Newfoundland and Labrador","901":"Memphis, TN","902":"Halifax, NS","903":"Longview, TX","904":"Jacksonville, FL","905":"Hamilton, ON","906":"Sault Ste Marie, MI","907":"Anchorage, AK","908":"Washington Township, NJ","909":"Anaheim, CA","910":"Fayetteville, NC","912":"Savannah, GA","913":"Kansas City, KS","914":"Mount Vernon, NY","915":"El Paso, TX","916":"Elk Grove, CA","917":"New York City, NY","918":"Broken Arrow, OK","919":"Cary, NC","920":"Appleton, WI","925":"Antioch, CA","928":"Flagstaff, AZ","929":"Bellerose, NY","930":"Bloomington, IN","931":"Clarksville, TN","934":"Babylon, NY","936":"Huntsville, TX","937":"Dayton, OH","938":"Huntsville, AL","939":"Puerto Rico","940":"Denton, TX","941":"Sarasota, FL","942":"Toronto, ON","943":"Georgia","945":"Texas","947":"Farmington Hills, MI","948":"Virginia","949":"Costa Mesa, CA","951":"Corona, CA","952":"Bloomington, MN","954":"Fort Lauderdale, FL","956":"Laredo, TX","959":"Hartford, CT","970":"Durango, CO","971":"Beaverton, OR","972":"Carrollton, TX","973":"Newark, NJ","975":"Kansas City, MO","978":"Haverhill, MA","979":"Bryan, TX","980":"Charlotte, NC","984":"Raleigh, NC","985":"Hammond, LA","986":"Boise, ID","989":"Alma, MI"};
+  var lpn = window.libphonenumber;
+  var numEl = document.getElementById("num");
+  var regionEl = document.getElementById("region");
+  var resultsEl = document.getElementById("results");
+
+  var TYPE_LABEL = {
+    MOBILE: "mobile", FIXED_LINE: "fixed line", FIXED_LINE_OR_MOBILE: "fixed line or mobile",
+    TOLL_FREE: "toll-free", PREMIUM_RATE: "premium rate", SHARED_COST: "shared cost",
+    VOIP: "VOIP", PERSONAL_NUMBER: "personal number", PAGER: "pager", UAN: "UAN", VOICEMAIL: "voicemail"
+  };
+
+  function flagEmoji(cc) {
+    if (!cc || cc.length !== 2) return "";
+    var A = 0x1F1E6, base = "A".charCodeAt(0);
+    return String.fromCodePoint(A + (cc.charCodeAt(0) - base)) + String.fromCodePoint(A + (cc.charCodeAt(1) - base));
+  }
+  function countryName(cc) {
+    if (!cc) return "unknown";
+    try { return new Intl.DisplayNames(["en"], { type: "region" }).of(cc) || cc; } catch (e) { return cc; }
+  }
+  function areaOrigin(parsed) {
+    if (String(parsed.countryCallingCode) !== "1") return null;
+    var nn = String(parsed.nationalNumber || "");
+    if (nn.length !== 10) return null;
+    var ac = nn.slice(0, 3);
+    return { code: ac, place: AREACODES[ac] || "unassigned / unknown", known: !!AREACODES[ac] };
+  }
+
+  // Offline assessment — honest UNKNOWN baseline, no live data.
+  function assessOffline(valid, typeLabel) {
+    var flags = [], notes = [];
+    var t = (typeLabel || "").toLowerCase();
+    if (!valid) flags.push("Fails validation — malformed or possibly spoofed");
+    if (t.indexOf("voip") !== -1) flags.push("VOIP line — heavily favored by scammers (burner / disposable)");
+    if (t.indexOf("premium") !== -1) flags.push("Premium-rate — charges on contact");
+    if (t.indexOf("toll-free") !== -1) notes.push("Toll-free line — common for business and for spoofed callbacks");
+    var level = "UNKNOWN";
+    if (flags.length === 1) level = "ELEVATED";
+    if (flags.length >= 2) level = "HIGH";
+    return { level: level, flags: flags, notes: notes };
+  }
+
+  // Live assessment — real read from IPQS reputation data.
+  function assessLive(live) {
+    var flags = [], notes = [];
+    if (live.voip) flags.push("VOIP line — favored by scammers (burner / disposable)");
+    if (live.recent_abuse) flags.push("Recent abuse reported against this number");
+    if (live.spammer) flags.push("Flagged as a known spammer");
+    if (live.risky) flags.push("Marked risky by reputation data");
+    if (live.valid === false) flags.push("Fails carrier validation");
+    if (live.prepaid) notes.push("Prepaid line");
+    if (live.active === false) notes.push("Number appears inactive / disconnected");
+
+    var fs = typeof live.fraud_score === "number" ? live.fraud_score : 0;
+    var level;
+    if (fs >= 85 || live.recent_abuse || live.spammer) level = "HIGH";
+    else if (fs >= 60 || live.voip || live.risky) level = "ELEVATED";
+    else level = "LOW";
+    return { level: level, flags: flags, notes: notes };
+  }
+
+  function footprintUrls(e164, national) {
+    var digits = e164.replace(/^\+/, "");
+    var q = [
+      { label: "Exact match", query: '"' + e164 + '"' },
+      { label: "National format", query: '"' + national + '"' },
+      { label: "Scam / spam reports", query: '"' + digits + '" (scam OR spam OR fraud OR complaint)' },
+      { label: "Reddit mentions", query: '"' + e164 + '" site:reddit.com' },
+      { label: "Complaint boards", query: '"' + national + '" site:800notes.com OR site:whocallsme.com' }
+    ];
+    return q.map(function (i) { return { label: i.label, url: "https://www.google.com/search?q=" + encodeURIComponent(i.query) }; });
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+  function showError(msg) {
+    resultsEl.innerHTML = '<div class="err fade"><b>Couldn\'t read that number.</b><br>' + esc(msg) + "</div>";
+  }
+  function field(k, v, cls) { return '<div class="field"><span class="k">' + k + '</span><span class="v' + (cls ? " " + cls : "") + '">' + v + "</span></div>"; }
+
+  function render(d) {
+    var level = d.level;
+    var lowOn = level === "LOW";
+    var elevOn = level === "ELEVATED" || level === "HIGH";
+    var highOn = level === "HIGH";
+    var wordColor = level === "HIGH" ? "var(--red)" : level === "ELEVATED" ? "var(--amber)"
+                  : level === "LOW" ? "var(--teal)" : "var(--muted)";
+
+    var items = d.flags.map(function (f) { return "<li>" + esc(f) + "</li>"; });
+    d.notes.forEach(function (n) { items.push('<li class="info">' + esc(n) + "</li>"); });
+    if (level === "LOW") items.push('<li class="good">No reputation flags — looks clean on live data.</li>');
+    if (level === "UNKNOWN" && !d.liveLoading) items.push('<li class="info">Offline data only. ' + (WORKER_URL ? "Live check unavailable." : "Connect the Worker for VOIP and fraud scoring.") + "</li>");
+    if (d.liveLoading) items.push('<li class="info">Running live reputation check…</li>');
+    var flagsHtml = items.join("");
+
+    var footHtml = d.footprint.map(function (f) {
+      return '<a href="' + f.url + '" target="_blank" rel="noopener noreferrer">' + esc(f.label) + '<span class="arr">search \u2197</span></a>';
+    }).join("");
+
+    var locationRow = d.areaKnown ? field("Area code origin", esc(d.areaCode) + " \u00B7 " + esc(d.areaPlace)) : "";
+
+    function liveVal(present, val) {
+      if (d.live) return present;
+      return d.liveLoading ? "checking\u2026" : "needs live data";
+    }
+    var carrierCls = d.live ? "" : "pending";
+    var voipCls = d.live ? (d.live.voip ? "no" : "yes") : "pending";
+    var fraudRow = (d.live && typeof d.live.fraud_score === "number")
+      ? field("Fraud score", d.live.fraud_score + " / 100", d.live.fraud_score >= 85 ? "no" : d.live.fraud_score >= 60 ? "" : "yes")
+      : "";
+
+    resultsEl.innerHTML =
+      '<div class="fade">' +
+        '<div class="verdict">' +
+          '<div class="verdict-top">' +
+            '<span class="verdict-word" style="color:' + wordColor + '">' + level + '</span>' +
+            '<span class="verdict-cap">scam signal</span>' +
+          '</div>' +
+          '<div class="meter">' +
+            '<span class="seg ' + (lowOn ? "on-low" : elevOn ? "on-elev" : "") + '"></span>' +
+            '<span class="seg ' + (elevOn ? "on-elev" : "") + '"></span>' +
+            '<span class="seg ' + (highOn ? "on-high" : "") + '"></span>' +
+          '</div>' +
+          '<ul class="flags">' + flagsHtml + '</ul>' +
+        '</div>' +
+        '<div class="data">' +
+          field("E.164", d.e164) +
+          field("International", d.international) +
+          field("National", d.national) +
+          field("Country", d.flag + " " + esc(d.country) + " (+" + esc(d.callingCode) + ")") +
+          locationRow +
+          field("Line type", esc(d.lineType)) +
+          field("Carrier", d.live ? esc(d.live.carrier || "unknown") : liveVal(), carrierCls) +
+          field("VOIP", d.live ? (d.live.voip ? "yes" : "no") : liveVal(), voipCls) +
+          fraudRow +
+          field("Valid", d.valid ? "yes" : "no", d.valid ? "yes" : "no") +
+        '</div>' +
+        '<div class="foot"><h3>Footprint searches</h3>' + footHtml + '</div>' +
+      '</div>';
+  }
+
+  function run() {
+    var raw = numEl.value.trim();
+    var region = regionEl.value.trim().toUpperCase() || "US";
+    if (!raw) { showError("Enter a number first."); return; }
+    var parsed;
+    try { parsed = lpn.parsePhoneNumber(raw, region); } catch (e) { parsed = null; }
+    if (!parsed) { showError("Couldn't parse that. Try a 10-digit US number (3055551234), or add a country code like +44 for non-US numbers."); return; }
+
+    var valid = parsed.isValid();
+    var lineType = TYPE_LABEL[parsed.getType()] || "unknown";
+    var area = areaOrigin(parsed);
+    var a = assessOffline(valid, lineType);
+    var cc = parsed.country || "";
+
+    var d = {
+      e164: parsed.number, international: parsed.formatInternational(), national: parsed.formatNational(),
+      country: countryName(cc), flag: flagEmoji(cc), callingCode: parsed.countryCallingCode,
+      areaCode: area ? area.code : "", areaPlace: area ? area.place : "", areaKnown: area ? area.known : false,
+      lineType: lineType, valid: valid,
+      level: a.level, flags: a.flags, notes: a.notes,
+      footprint: footprintUrls(parsed.number, parsed.formatNational()),
+      live: null, liveLoading: false
+    };
+
+    render(d);
+
+    if (WORKER_URL) {
+      d.liveLoading = true;
+      render(d);
+      fetch(WORKER_URL.replace(/\/$/, "") + "/?phone=" + encodeURIComponent(d.e164))
+        .then(function (r) { return r.json(); })
+        .then(function (live) {
+          d.liveLoading = false;
+          if (!live || live.error) { d.live = null; render(d); return; }
+          d.live = live;
+          var al = assessLive(live);
+          d.level = al.level; d.flags = al.flags; d.notes = al.notes;
+          render(d);
+        })
+        .catch(function () { d.liveLoading = false; d.live = null; render(d); });
+    }
+  }
+
+  document.getElementById("scan").addEventListener("click", run);
+  numEl.addEventListener("keydown", function (e) { if (e.key === "Enter") run(); });
+  regionEl.addEventListener("keydown", function (e) { if (e.key === "Enter") run(); });
+})();
+</script>
+</body>
+</html>
