@@ -79,6 +79,9 @@
   .foot a:hover { border-color: var(--amber); }
   .foot a:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
   .foot a .arr { color: var(--amber); font-family: "JetBrains Mono", monospace; }
+  .foot-section { margin-bottom: 14px; }
+  .foot-section:last-child { margin-bottom: 0; }
+  .foot-section h3 { font-family: "JetBrains Mono", monospace; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
   .disclaimer { color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 10.5px; line-height: 1.6; margin-top: 18px; text-align: center; }
   .fade { animation: fade .35s ease both; }
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
@@ -179,16 +182,41 @@
     return { level: level, flags: flags, notes: notes };
   }
 
-  function footprintUrls(e164, national) {
+  function buildFootprint(e164, national) {
     var digits = e164.replace(/^\+/, "");
-    var q = [
-      { label: "Exact match", query: '"' + e164 + '"' },
-      { label: "National format", query: '"' + national + '"' },
-      { label: "Scam / spam reports", query: '"' + digits + '" (scam OR spam OR fraud OR complaint)' },
-      { label: "Reddit mentions", query: '"' + e164 + '" site:reddit.com' },
-      { label: "Complaint boards", query: '"' + national + '" site:800notes.com OR site:whocallsme.com' }
-    ];
-    return q.map(function (i) { return { label: i.label, url: "https://www.google.com/search?q=" + encodeURIComponent(i.query) }; });
+    var nat = national.replace(/[^0-9]/g, "");
+    function gsearch(q) { return "https://www.google.com/search?q=" + encodeURIComponent(q); }
+    return {
+      google: [
+        { label: "Exact match", url: gsearch('"'+ e164 +'"') },
+        { label: "National format", url: gsearch('"'+ national +'"') },
+        { label: "Scam / fraud reports", url: gsearch('"'+ national +'" (scam OR spam OR fraud OR complaint)') },
+        { label: "Reddit mentions", url: gsearch('"'+ e164 +'" site:reddit.com') },
+      ],
+      social: [
+        { label: "Facebook", url: "https://www.facebook.com/search/top/?q=" + encodeURIComponent(e164) },
+        { label: "LinkedIn", url: "https://www.linkedin.com/search/results/all/?keywords=" + encodeURIComponent(e164) },
+        { label: "Instagram", url: gsearch('"'+ e164 +'" site:instagram.com') },
+        { label: "X / Twitter", url: "https://x.com/search?q=" + encodeURIComponent(e164) + "&src=typed_query" },
+      ],
+      spam: [
+        { label: "800notes", url: "https://800notes.com/Phone.aspx/" + nat },
+        { label: "WhoCallsMe", url: "https://whocallsme.com/Phone.aspx/" + nat },
+        { label: "SpamCalls.net", url: "https://spamcalls.net/en/search?q=" + encodeURIComponent(national) },
+        { label: "CallerSmart", url: "https://www.callersmart.com/phone-number-lookup/" + nat },
+      ],
+      breach: [
+        { label: "Have I Been Zuckered (FB 533M leak)", url: "https://haveibeenzuckered.com/?number=" + encodeURIComponent(digits) },
+        { label: "IntelligenceX", url: "https://intelx.io/?s=" + encodeURIComponent(e164) },
+      ]
+    };
+  }
+
+  function footSection(title, links) {
+    return '<div class="foot-section"><h3>' + title + '</h3>' +
+      links.map(function(f) {
+        return '<a href="' + f.url + '" target="_blank" rel="noopener noreferrer">' + esc(f.label) + '<span class="arr">open \u2197</span></a>';
+      }).join("") + '</div>';
   }
 
   function esc(s) {
@@ -214,9 +242,11 @@
     if (d.liveLoading) items.push('<li class="info">Running live reputation check…</li>');
     var flagsHtml = items.join("");
 
-    var footHtml = d.footprint.map(function (f) {
-      return '<a href="' + f.url + '" target="_blank" rel="noopener noreferrer">' + esc(f.label) + '<span class="arr">search \u2197</span></a>';
-    }).join("");
+    var footHtml =
+      footSection("Google searches", d.footprint.google) +
+      footSection("Social platforms", d.footprint.social) +
+      footSection("Spam report boards", d.footprint.spam) +
+      footSection("Breach databases", d.footprint.breach);
 
     var locationRow = d.areaKnown ? field("Area code origin", esc(d.areaCode) + " \u00B7 " + esc(d.areaPlace)) : "";
 
@@ -254,9 +284,11 @@
           field("Carrier", d.live ? esc(d.live.carrier || "unknown") : liveVal(), carrierCls) +
           field("VOIP", d.live ? (d.live.voip ? "yes" : "no") : liveVal(), voipCls) +
           fraudRow +
+          field("Timezone(s)", d.timezones.length ? esc(d.timezones.join(", ")) : "unknown") +
+          (d.live && d.live.ported !== null ? field("Number ported", d.live.ported ? "yes" : "no", d.live.ported ? "" : "yes") : "") +
           field("Valid", d.valid ? "yes" : "no", d.valid ? "yes" : "no") +
         '</div>' +
-        '<div class="foot"><h3>Footprint searches</h3>' + footHtml + '</div>' +
+        '<div class="foot">' + footHtml + '</div>' +
       '</div>';
   }
 
@@ -278,9 +310,9 @@
       e164: parsed.number, international: parsed.formatInternational(), national: parsed.formatNational(),
       country: countryName(cc), flag: flagEmoji(cc), callingCode: parsed.countryCallingCode,
       areaCode: area ? area.code : "", areaPlace: area ? area.place : "", areaKnown: area ? area.known : false,
-      lineType: lineType, valid: valid,
+      lineType: lineType, valid: valid, timezones: (function(){ try { return lpn.getTimezonesForNumber(parsed) || []; } catch(e) { return []; } })(),
       level: a.level, flags: a.flags, notes: a.notes,
-      footprint: footprintUrls(parsed.number, parsed.formatNational()),
+      footprint: buildFootprint(parsed.number, parsed.formatNational()),
       live: null, liveLoading: false
     };
 
